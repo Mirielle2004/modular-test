@@ -1,4 +1,4 @@
-class Component extends Vector {
+export class Component extends Vector {
     constructor(x = 0, y = 0, w = 0, h = 0) {
         super(x, y);
         this.w = w;
