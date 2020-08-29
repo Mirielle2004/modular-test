@@ -2,7 +2,7 @@
 /**
  * @description Pricipal class that manipulates the canvas element and draws the canvas
  */
-class Scene {
+export class Scene {
     /**
      * 
      * @param {Object} arg objects arguement for the scene, it accepts 
