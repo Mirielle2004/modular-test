@@ -1,4 +1,10 @@
 import {AbstractBaseMixin} from "https://cdn.jsdelivr.net/gh/Mirielle2004/modular-test@master/1.js"
+import {Vector} from "https://cdn.jsdelivr.net/gh/Mirielle2004/modular-test@master/1.js"
+import {Component} from "https://cdn.jsdelivr.net/gh/Mirielle2004/modular-test@master/1.js"
+import {Scene} from "https://cdn.jsdelivr.net/gh/Mirielle2004/modular-test@master/1.js"
+import {SwipeControl} from "https://cdn.jsdelivr.net/gh/Mirielle2004/modular-test@master/1.js"
+import {Joystick} from "https://cdn.jsdelivr.net/gh/Mirielle2004/modular-test@master/1.js"
+
 
 CanvasRenderingContext2D.prototype.__proto__ = {
 
