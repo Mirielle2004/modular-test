@@ -1,3 +1,5 @@
+import {AbstractBaseMixin} from "https://cdn.jsdelivr.net/gh/Mirielle2004/modular-test@master/1.js"
+
 CanvasRenderingContext2D.prototype.__proto__ = {
 
     /**
