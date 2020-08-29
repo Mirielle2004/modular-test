@@ -7,7 +7,7 @@
  * @param {number} y diff(Y) of the vector
  * 
  */
-const Vector = function (x, y) {
+export const Vector = function (x, y) {
     this.x = x;
     this.y = y;
     this.magnitude = Math.hypot(this.x, this.y);
