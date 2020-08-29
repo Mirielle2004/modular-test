@@ -3,7 +3,7 @@
  * @description gives a swipe gesture functionality to it's binded element
  * 
  */
-class SwipeControl {
+export class SwipeControl {
     /**
      * 
      * @constructor
