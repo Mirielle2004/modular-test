@@ -1,4 +1,4 @@
-const AbstractBaseMixin = {
+export const AbstractBaseMixin = {
 
     debug: false,
 
