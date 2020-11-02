@@ -1,0 +1,527 @@
+let canvas, ctx, W, H, map, camera, player, friction, tileset, enemies = [], sprite, elapsed_time, fps, player_img,bullets = [],blocks = [25,26,139,140,137,138,69,73,54],nblocks = [11,112,113,114,70,71,96,92,93,72,99,100],currentLevel = -1, maxLevel=3,js1, js2;
+
+
+const init = () => {
+    canvas = document.getElementById("cvs");
+    ctx = canvas.getContext("2d");
+    W = canvas.width = innerWidth;
+    H = canvas.height = innerHeight;
+    map = new OrthographicMap(levelMap[0].map, [42, 42]);
+    camera = new OrthographicCamera([0,0], [W, H]);
+    map.setDimension([50, 50]);
+    player = new Player([64, 64], [42, 42]);
+    friction = new Vec2d(.98, .98);
+    // images
+    tileset = new Image();
+    tileset.onload = () => requestAnimationFrame(animate);
+    tileset.src = "defend.png";
+    player_img = new Image();
+    player_img.onload = () => requestAnimationFrame(animate);
+    player_img.src = "unnamed.gif";
+    game.newLevel();
+    // shooting controller
+    js1 = new JoyStick();
+    js1.setStyles({
+        dynamic: false,
+        pos: {x: 2, y: 80}
+    });
+    js1.init();
+    // movement controller
+    js2 = new JoyStick();
+    js2.init();
+    eventHandler();
+};
+
+
+const update = () => {
+
+    fps = Platformer2D.getFPS();
+    elapsed_time = Platformer2D.getElapsedTime();
+
+    camera.lookAt(map);
+    camera.follow(player.pos, player.dimension);
+    camera.setPosClamp([0, 0], map.dimension.mult(map.size));
+    camera.setMapClamp([0, 0], map.dimension);
+    map.setView(camera.minPos, camera.maxPos);
+
+    // render the map
+    map.render(() => {
+        let pos = map.index.scale(map.size.x).sub(camera.pos)
+            .applyFunc(Math.floor);
+        let src = Platformer2D.getTileSetIndex(map.id - 1, 22
+            ).applyFunc(Math.floor).scale(32);
+        let mid = new Vec2d(pos.x + map.size.x/2, pos.y + map.size.y/2);
+        let light = player.absPos.sub(mid).length/200;
+        if(light >= 0.0001) {
+            if(map.id - 1 === 53) {
+                ctx.fillStyle = "lightskyblue";
+                ctx.fillRect(pos.x, pos.y, map.size.x, map.size.y);
+            } else {
+                ctx.drawImage(tileset, src.x, src.y, 32, 32, pos.x, 
+                pos.y, map.size.x, map.size.y);
+            }
+        }
+        ctx.save();
+        ctx.globalAlpha = light;
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(pos.x, pos.y, map.size.x, map.size.y);
+        ctx.restore();
+    });
+
+    if(js2.isActive) {
+        player.rotation = js2.data.angle;
+        player.velocity = Vec2d.cartToPolar(player.rotation)
+                .scale(player.speed);
+    }
+
+    player.update();
+
+    bullets.forEach(bullet => {
+        bullet.update();
+    });
+
+    enemies.forEach((e, i) => {
+        bullets.forEach((bullet, j) => {
+            if(bullet.type === "player") {
+                if(rectCollision(bullet._rect, e._rect)) {
+                    bullets.splice(j, 1);
+                    e.lives-=6;
+                }
+            }
+        })
+        e.update();
+    });
+
+    // draw HP
+    let mid = player.hp / 2;
+    ctx.save();
+    ctx.font = "bold 15px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#eeeeee";
+    ctx.fillText("HP", 15, 15);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#222";
+    ctx.fillStyle = player.lives >= mid ? "green" : player.lives >= mid/2 && player.lives < mid ? "yellow" : "red";
+    ctx.fillRect(30, 10, player.lives, 10);
+    ctx.strokeRect(30, 10, player.hp, 10);
+    ctx.restore();
+
+    // info
+    ctx.strokeStyle = "#eeeeee";
+    ctx.strokeRect(W-60, 10, 50, 30);
+    ctx.fillStyle = "#eeeeee";
+    ctx.font = "bold 15px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Info", W-35, 25);
+    ctx.fillText("Created By Mirielle", W-80, H-10);
+
+    // increase level
+    if(enemies.length === 0)
+        game.newLevel();
+
+};
+
+
+/**
+ * @class Player
+ * principal class for the player's object
+ */
+class Player extends Component {
+    /**
+     * 
+     * @param {Vec2d} pos world positional vector
+     * @param {Vec2d} dimension dimension of the player
+     */
+    constructor(pos, dimension) {
+        super(pos, dimension);
+        this.rotation = 0;
+        this._bullets = [];
+        this._lastFired = new Date().getTime();
+        this.hp = 100;
+        this.lives = 100;
+        this.speed = 60;
+        this.isShooting = false;
+        this.absPos = this.pos;
+    }
+
+    update() {
+        let _this = this;
+        let now = new Date().getTime();
+        // init bullet
+        this.velocity = this.velocity.mult(friction);
+        // player - map pixels based collision detection
+        this.orthCollision(map, this.velocity.scale(elapsed_time), {
+            left() {
+                if(nblocks.every(i => i !==_this.currentPos)) { 
+                    if(_this.velocity.x < 0) {
+                        _this.nextPos.x = Math.floor(_this.lastPos.x);
+                        _this.velocity.x = 0;
+                    } else {
+                        _this.nextPos.x = Math.ceil(_this.lastPos.x);
+                        _this.velocity.x = 0;
+                    }
+                }
+            },
+            top() {
+                if(nblocks.every(i => i !==_this.currentPos)) {
+                    if(_this.velocity.y < 0) {
+                        _this.nextPos.y = Math.floor(_this.lastPos.y);
+                        _this.velocity.y = 0;
+                    } else {
+                        _this.nextPos.y = Math.ceil(_this.lastPos.y);
+                        _this.velocity.y = 0;
+                    }
+
+                }
+            }
+        });
+
+        let cameraSpace = this.pos.add(this.dimension.scale(0.5)).sub(camera.pos);
+        this.absPos = cameraSpace;
+
+        this._rect = {
+            x: cameraSpace.x - this.dimension.x/2,
+            y: cameraSpace.y - this.dimension.y/2,
+            w: this.dimension.x,
+            h: this.dimension.y
+        };
+
+        // create bullet
+        let screenSpace = cameraSpace.add(camera.pos);
+        let o = {x: screenSpace.x + 15, y: screenSpace.y + 10};
+        let diff = Vec2d.createFrom(o).sub(screenSpace);
+        let rotated = Mat3x3.multiplyVec(diff, Mat3x3.rotate(this.rotation));
+        let nPos = Vec2d.createFrom(rotated).add(screenSpace);
+        let bullet = new Bullet(nPos, this.rotation, "player");
+        this.bullet = bullet;
+
+        // draw player
+        ctx.save();
+        ctx.fillStyle = "navy";
+        ctx.translate(cameraSpace.x, cameraSpace.y);
+        ctx.rotate(this.rotation);
+            ctx.drawImage(player_img, 30, 40, 180, 150, -this.dimension.x/2, 
+                -this.dimension.y + 20,this.dimension.x, this.dimension.y);
+        ctx.restore();
+
+        if(this.lives < 0)
+            game.restartLevel();
+    }
+};
+
+
+class Tank {
+    constructor(pos) {
+        this.pos = Vec2d.createFrom(pos);
+        this.size = 64;
+        this.rotation = 0;
+        let active = [
+            [60,82,104,126,148,170,192],
+            [66,88,110,132,154,176,198]
+        ];
+        this.sprite = new Sprite({
+            active: active[~~(Math.random() * active.length)],
+            explosion: [1, 2, 3],
+        }, 22);
+        this._bullets = [];
+        this._lastFired = new Date().getTime();
+        this._nextFired = min_max(1000, 2000); 
+        this.lives = this.size;
+        this._deleteCounter = 0;
+    }
+
+    update() {
+        if(this.lives >= 0)
+            this.sprite.setFrame("active");
+        else
+            this.sprite.setFrame("explosion");
+        this.sprite.getSource();
+
+        if(this.sprite.state === false && this.sprite.frameName === "explosion")
+            this._deleteCounter++;
+
+        if(this._deleteCounter >= 10) 
+                enemies.splice(enemies.indexOf(this), 1);
+
+        let now = new Date().getTime();
+        let diffPos = player.pos.sub(this.pos);
+        this.rotation = diffPos.angle;
+
+        // draw tank
+        let cameraSpace = this.pos.add([this.size/2, this.size/2]).sub(camera.pos);
+        let index = Vec2d.createFrom(this.sprite.index).applyFunc(
+            Math.floor).scale(32);
+        // FIX LIGHT
+        let dot = player.absPos.sub(cameraSpace).length;
+        let light = 200 / (200 + dot);
+        if(light >= 1) light = 1;
+        else if (light <= 0.5 && diffPos.length > 250) light = 0;
+        ctx.save();
+        ctx.globalAlpha = light;
+        ctx.translate(cameraSpace.x, cameraSpace.y);
+        ctx.rotate(this.rotation);
+        ctx.drawImage(tileset, index.x, index.y, 32, 32, -this.size/2, 
+            -this.size/2, this.size, this.size);
+        ctx.restore();
+
+        this._rect = {
+            x: cameraSpace.x - this.size/2,
+            y: cameraSpace.y - this.size/2,
+            w: this.size,
+            h: this.size
+        };
+
+        if(this.lives >= 0) {
+            // draw lives
+            ctx.save();
+            ctx.translate(cameraSpace.x - this.size/2, cameraSpace.y - this.size/2);
+            ctx.globalAlpha = light;
+            let mid = this.size / 2;
+            ctx.fillStyle = this.lives >= mid ? "green" : this.lives >= mid/2 && this.lives < mid ? "yellow" : "red";
+            ctx.strokeStyle = "#222";
+            ctx.fillRect(0, this.size, this.lives, 10);
+            ctx.strokeRect(0, this.size, this.size, 10);
+            ctx.restore();
+
+            // draw bullet
+            let screenSpace = cameraSpace.add(camera.pos);
+            if(Math.abs(now - this._lastFired) > this._nextFired)  {
+                let o = {x: screenSpace.x + 5, y: screenSpace.y + 5};
+                let diff = Vec2d.createFrom(o).sub(screenSpace);
+                let rotated = Mat3x3.multiplyVec(diff, Mat3x3.rotate(this.rotation));
+                let nPos = Vec2d.createFrom(rotated).add(screenSpace);
+                let bullet = new Bullet(nPos, this.rotation);
+                if(diffPos.length <= 250) {
+                    bullets.push(bullet);
+                }
+                this._lastFired = now;
+            }
+        }
+
+        if(rectCollision(this._rect, player._rect) && this.lives >= 0) {
+            this.sprite.setFrame("explosion");
+            this.lives = 0;
+            player.lives = -1;
+        }
+        
+    }
+};
+
+
+
+class Bullet {
+    /**
+    * @param {Vec2d} position of the bullet
+    * @param {Number} vector's angle and rotational angle for the bullet
+    * @param {String} type of the bullet
+    */
+    constructor(pos, a, type="enemy") {
+        this.pos = Vec2d.createFrom(pos);
+        this.o = this.pos;
+        this.type = type;
+        this.angle = a;
+        this.maxDist = type === "enemy" ? 250 : 150;
+        this.speed = type === "enemy" ? 2 : 2.5; 
+        this.velocity = new Vec2d(this.speed, this.speed);
+        this._rect = {};
+    }
+
+    update() {
+        let absPos = this.pos.sub(camera.pos);
+        let oabsPos = this.o.sub(camera.pos);
+
+        if(absPos.x < 0) this.pos.x = 0;
+
+        // delete bullet if they travel pass their maxDist
+        let distPos = absPos.sub(oabsPos);
+        if(distPos.length >= this.maxDist)
+            bullets.splice(bullets.indexOf(this), 1);
+
+        this.velocity = Vec2d.cartToPolar(this.angle).scale(this.speed);
+
+        // bulet - map pixel based collision detection
+        let nextPos = this.pos.add(this.velocity);
+        let x_min = ~~(nextPos.x / map.size.x);
+        let y_min = ~~(nextPos.y / map.size.y);
+        let value = OrthographicMap.getMapId(map.map, 
+            {x: x_min, y: y_min}, map.dimension.x);
+
+        if(blocks.some(i => i === value))
+            bullets.splice(bullets.indexOf(this), 1);
+
+        // move the bullet
+        this.pos = this.pos.add(this.velocity);
+
+        // draw the bullet
+        if(this.type === "enemy") {
+            this.dimension = Vec2d.createFrom([8, 12]);
+            ctx.drawImage(tileset, 8.4*32, 8.9, this.dimension.x, 
+                this.dimension.y, absPos.x, absPos.y, 8, 12);
+        } else {
+            ctx.save();
+            ctx.translate(absPos.x, absPos.y);
+            ctx.rotate(this.angle);
+            ctx.drawImage(tileset, 5.3*32, 14, 12, 6, -6, 
+                -3, 12, 6);
+            ctx.restore();
+        }
+
+        this._rect = {
+            x: absPos.x,
+            y: absPos.y,
+            w: 6,
+            h: 6
+        }; 
+
+        // bullet's collision with component check
+        bullets.forEach((bullet, i) => {
+            if(this !== bullet) {
+                if(rectCollision(this._rect, bullet._rect)) {
+                    bullets.splice(bullets.indexOf(this), 1);
+                    bullets.splice(bullets.indexOf(bullet), 1);
+                }
+            }
+
+            if(bullet.type === "enemy") {
+                if(rectCollision(bullet._rect, player._rect)) {
+                    player.lives--;
+                    bullets.splice(bullets.indexOf(bullet), 1);
+                }
+            }
+        });
+    }
+}
+
+const animate = () => {
+    ctx.clearRect(0, 0, W, H);
+    update();
+    requestAnimationFrame(animate);
+};
+
+const eventHandler = () => {
+
+    js1.onMove = function() {
+        player.rotation = this.data.angle;
+        bullets.push(player.bullet);
+    }
+
+    js2.onStart = function() {
+        let mouse = this.data.mouse;
+        if(mouse.clientX > 150) {
+            this.isActive = true;
+        } else this.isActive = false;
+    }
+
+    addEventListener("mousedown", e => {
+        if(e.clientX > W-60 && e.clientY < 50) 
+            game.showMission();
+    });
+
+    addEventListener("keydown", e => {
+        let s = player.speed;
+        if(e.keyCode === 37) 
+            player.rotation -= .1;
+        else if(e.keyCode === 38)
+            player.velocity = Vec2d.cartToPolar(player.rotation)
+                .scale(player.speed);
+        else if(e.keyCode === 39)
+            player.rotation += .1;
+        else if(e.keyCode === 32) {
+            bullets.push(player.bullet);
+        }
+    });
+
+    addEventListener("keyup", () => {
+        player.isShooting = false;
+    });
+}
+
+const game = {
+    restartLevel() {
+        enemies = [];
+        bullets = [];
+        player.velocity = new Vec2d();
+        map.map = levelMap[currentLevel].map;
+        player.pos = Vec2d.createFrom(levelMap[currentLevel].pos);
+        player.rotation = levelMap[currentLevel].pos.r;
+        player.lives = 100;
+        levelMap[currentLevel].enemies.forEach(pos => {
+            let tank = new Tank([pos[0], pos[1]]);
+            enemies.push(tank);
+        });
+    },
+    newLevel() {
+        currentLevel++;
+        if(currentLevel >= maxLevel) {
+            currentLevel = maxLevel;
+            player.velocity = new Vec2d();
+            game.end();
+        } else {
+            player.velocity = new Vec2d();
+            map.map = levelMap[currentLevel].map;
+            player.pos = Vec2d.createFrom(levelMap[currentLevel].pos);
+            player.rotation = levelMap[currentLevel].pos.r;
+            levelMap[currentLevel].enemies.forEach(pos => {
+                let tank = new Tank([pos[0], pos[1]]);
+                enemies.push(tank);
+            });
+            showInfo(levelMap[currentLevel].name, 2000, function() {
+                bullets = [];
+                player.lives = 100;
+            });
+        }
+    },
+    end() {
+        enemies = [];
+        bullets = [];
+        showInfo("Congratulations", 2000);
+    },
+    showMission() {
+        alert(`
+Author: Mirielle S.
+You MUST restore normalcy by eliminating all badguyz in the tank!
+
+HINT:
+------------------
+You only die once so do make an important use of the given HP.
+make sure you hide behind walls so you won't get shot by the badguys.
+There are currently 3 different levels.
+
+
+TOUCHSCREEN:
+-------------------
+you're provided with two joystick, one is visible while the other 
+becomes visible the moment you tap on the right side of the screen..
+goodluck figuring out their functions.
+
+KEYBOARD:
+------------------
+use the LEFT/RIGHT arrow keys to switch direction,
+UP arrow key to move forward to the direction
+SPACE key to shoot`);
+    }
+}
+
+const rectCollision = (a, b) => {
+    return a.x + a.w > b.x && b.x + b.w > a.x && 
+    a.y + a.h > b.y && b.y + b.h > a.y
+};
+
+const min_max = (min, max) => Math.random() * (max - min + 1) + min;
+
+const showInfo = (text, time, callback=null) => {
+    let divLevel = document.getElementById("info");
+    divLevel.style.top = "0";
+    divLevel.innerText = text;
+    canvas.style.filter = "blur(10px)";
+    setTimeout(() => {
+        divLevel.style.top = "-100%";
+        canvas.style.filter = "blur(0px)";
+        divLevel.innerText = "";
+        if(typeof callback === "function")callback();
+    }, time);
+}
+
+addEventListener("load", init);
