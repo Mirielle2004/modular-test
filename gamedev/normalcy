@@ -48,10 +48,10 @@ const init = () => {
     // images
     tileset = new Image();
     tileset.onload = () => requestAnimationFrame(animate);
-    tileset.src = "defend.png";
+    tileset.src = "https://i.ibb.co/hDK9Qyz/defend.png";
     player_img = new Image();
     player_img.onload = () => requestAnimationFrame(animate);
-    player_img.src = "unnamed.gif";
+    player_img.src = "https://i.ibb.co/7QsrdNw/unnamed.gif";
     game.newLevel();
     // shooting controller
     js1 = new JoyStick();
