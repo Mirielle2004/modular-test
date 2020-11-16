@@ -14,14 +14,6 @@ function hello() {
     console.log("roygbiv");
 }
 
-Object.defineProperties(Math, {
-    radToDeg: {
-        value: function(n) {
-            return n * 180 / this.PI;
-        }
-    }
-})
-
 export default function area(x, y) {
     console.log(x * y);
 }
